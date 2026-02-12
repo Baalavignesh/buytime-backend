@@ -124,7 +124,7 @@ Make sure your server reads the PORT from environment (Fly.io uses port 8080 int
 
 ```typescript
 // In src/index.ts or src/config/index.ts
-const port = parseInt(process.env.PORT || "3000", 10);
+const port = parseInt(process.env.PORT || "8080", 10);
 ```
 
 ### 1.4 Add Health Check Endpoint
@@ -605,7 +605,7 @@ fly logs --tail
 ```bash
 # Test locally first
 bun run dev
-curl http://localhost:3000/health
+curl http://localhost:8080/health
 
 # Check if port matches fly.toml internal_port
 # Should be 8080 for Fly.io
@@ -684,4 +684,4 @@ You'll only pay if you:
 ---
 
 *Deployment guide for BuyTime Backend*
-*Last updated: February 2, 2026*
+*Last updated: February 12, 2026*

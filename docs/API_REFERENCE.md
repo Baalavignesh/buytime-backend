@@ -1,0 +1,282 @@
+# BuyTime API Reference
+
+> For use by the iOS Swift client. Keep this file alongside your Xcode project as a reference for all backend API calls.
+>
+> **Base URL:** `https://<your-fly-domain>` (local: `http://localhost:8080`)
+
+---
+
+## Authentication
+
+All `/api/*` endpoints require a Clerk JWT in the `Authorization` header.
+
+```
+Authorization: Bearer <clerk_jwt_token>
+```
+
+Get this token from the Clerk iOS SDK:
+
+```swift
+// Example using Clerk iOS SDK
+let token = try await clerk.session?.getToken()
+```
+
+Webhook endpoints (`/webhooks/*`) do **not** use JWT auth — they use signature verification handled server-side.
+
+---
+
+## Response Format
+
+All responses follow this shape:
+
+```json
+// Success
+{
+  "success": true,
+  "data": { ... }
+}
+
+// Error
+{
+  "success": false,
+  "error": "Error message string"
+}
+```
+
+### Common HTTP Status Codes
+
+| Code | Meaning |
+|------|---------|
+| 200  | Success |
+| 400  | Bad request (invalid body/params) |
+| 401  | Unauthorized (missing or invalid JWT) |
+| 404  | Resource not found |
+| 500  | Internal server error |
+
+---
+
+## Endpoints
+
+### Health Check
+
+#### `GET /health`
+
+No authentication required.
+
+**Response:**
+```json
+{
+  "success": true,
+  "data": {
+    "status": "healthy",
+    "timestamp": "2026-02-12T10:00:00.000Z",
+    "database": "connected"
+  }
+}
+```
+
+---
+
+### Users
+
+#### `GET /api/users/me`
+
+Get the current authenticated user's profile, balance, and basic stats.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-string",
+    "email": "user@example.com",
+    "displayName": "John Doe",
+    "subscriptionTier": "free",
+    "subscriptionStatus": "none",
+    "subscriptionExpiresAt": null,
+    "createdAt": "2026-02-12T10:00:00.000Z",
+    "balance": {
+      "availableMinutes": 0,
+      "currentStreakDays": 0
+    }
+  }
+}
+```
+
+**Error (404):** User not found in database. This means the Clerk webhook hasn't fired yet or failed. Consider retrying after a short delay.
+
+---
+
+#### `PATCH /api/users/me`
+
+Update the current user's display name.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "displayName": "New Name"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `displayName` | `string` | No | Pass to update; omit to leave unchanged |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-string",
+    "email": "user@example.com",
+    "displayName": "New Name",
+    "updatedAt": "2026-02-12T10:30:00.000Z"
+  }
+}
+```
+
+---
+
+#### `DELETE /api/users/me`
+
+Delete the current user's account and all associated data (balance, stats, sessions, spending records). This is irreversible.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "deleted": true
+  }
+}
+```
+
+---
+
+### Webhooks (Server-to-Server)
+
+These are called by Clerk, not by the iOS app.
+
+#### `POST /webhooks/clerk`
+
+Receives Clerk webhook events (`user.created`, `user.updated`, `user.deleted`). Verified via Svix signature headers.
+
+**What it does for the iOS app:**
+- When a user signs up via Clerk in the iOS app, Clerk fires `user.created`
+- The backend automatically creates rows in `users`, `user_balance`, and `user_stats`
+- After this, `GET /api/users/me` will return the user's profile
+
+---
+
+## Swift Integration Notes
+
+### Suggested NetworkManager pattern
+
+```swift
+enum APIError: Error {
+    case unauthorized
+    case notFound
+    case badRequest(String)
+    case serverError
+    case decodingError
+}
+
+struct APIResponse<T: Decodable>: Decodable {
+    let success: Bool
+    let data: T?
+    let error: String?
+}
+
+class BuyTimeAPI {
+    static let shared = BuyTimeAPI()
+
+    private let baseURL = "https://your-app.fly.dev"  // Update this
+
+    private func authHeaders() async throws -> [String: String] {
+        guard let token = try await Clerk.shared.session?.getToken() else {
+            throw APIError.unauthorized
+        }
+        return [
+            "Authorization": "Bearer \(token)",
+            "Content-Type": "application/json"
+        ]
+    }
+
+    // GET /api/users/me
+    func getUser() async throws -> UserProfile { ... }
+
+    // PATCH /api/users/me
+    func updateUser(displayName: String) async throws -> UserProfile { ... }
+
+    // DELETE /api/users/me
+    func deleteUser() async throws { ... }
+}
+```
+
+### Handling the webhook timing gap
+
+After a user signs up via Clerk in the iOS app, there's a brief delay before the webhook fires and creates the DB user. Handle this in the app:
+
+```swift
+// After Clerk sign-up completes, poll for user creation
+func waitForUserCreation(maxRetries: Int = 5) async throws -> UserProfile {
+    for attempt in 0..<maxRetries {
+        do {
+            return try await BuyTimeAPI.shared.getUser()
+        } catch APIError.notFound {
+            // User not yet created by webhook, wait and retry
+            try await Task.sleep(for: .seconds(1))
+            continue
+        }
+    }
+    throw APIError.notFound
+}
+```
+
+---
+
+## Data Types Reference
+
+### UserProfile
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | `String` (UUID) | Internal DB ID |
+| `email` | `String?` | From Clerk |
+| `displayName` | `String?` | From Clerk or user-set |
+| `subscriptionTier` | `String` | `"free"` or `"premium"` |
+| `subscriptionStatus` | `String` | `"none"`, `"active"`, `"expired"`, `"cancelled"` |
+| `subscriptionExpiresAt` | `String?` | ISO 8601 datetime or null |
+| `createdAt` | `String` | ISO 8601 datetime |
+| `balance.availableMinutes` | `Int` | Spendable reward minutes |
+| `balance.currentStreakDays` | `Int` | Consecutive days with sessions |
+
+### Focus Modes (for future session endpoints)
+
+| Mode | Multiplier | Reward per 60min focus |
+|------|-----------|----------------------|
+| `fun` | 150% | 90 min |
+| `easy` | 100% | 60 min |
+| `medium` | 50% | 30 min |
+| `hard` | 25% | 15 min |
+
+---
+
+*Last updated: February 12, 2026 — Phase 1 & 2 (Foundation + Authentication)*
+*Endpoints will be added here as new phases are implemented.*
