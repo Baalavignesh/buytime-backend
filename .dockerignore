@@ -1,0 +1,16 @@
+# .dockerignore
+node_modules
+.git
+.gitignore
+*.md
+.env
+.env.*
+!.env.example
+tests
+*.test.ts
+.DS_Store
+
+# IDE/Editor specific folders
+.agents
+.claude
+.cursor
