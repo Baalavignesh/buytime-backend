@@ -179,8 +179,72 @@ Receives Clerk webhook events (`user.created`, `user.updated`, `user.deleted`). 
 
 **What it does for the iOS app:**
 - When a user signs up via Clerk in the iOS app, Clerk fires `user.created`
-- The backend automatically creates rows in `users`, `user_balance`, and `user_stats`
+- The backend automatically creates rows in `users`, `user_balance`, `user_stats`, and `user_preferences`
 - After this, `GET /api/users/me` will return the user's profile
+
+---
+
+### Preferences
+
+#### `GET /api/preferences`
+
+Get the current user's default focus settings.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "focusDurationMinutes": 25,
+    "focusMode": "easy",
+    "updatedAt": "2026-02-18T12:00:00.000Z"
+  }
+}
+```
+
+---
+
+#### `PATCH /api/preferences`
+
+Update the current user's default focus settings. At least one field must be provided.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "focusDurationMinutes": 30,
+  "focusMode": "medium"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `focusDurationMinutes` | `integer` | No | Must be between 1 and 240 |
+| `focusMode` | `string` | No | One of: `fun`, `easy`, `medium`, `hard` |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "focusDurationMinutes": 30,
+    "focusMode": "medium",
+    "updatedAt": "2026-02-18T12:30:00.000Z"
+  }
+}
+```
+
+**Error (400):** Invalid body, missing fields, or out-of-range values.
 
 ---
 
@@ -226,6 +290,12 @@ class BuyTimeAPI {
 
     // DELETE /api/users/me
     func deleteUser() async throws { ... }
+
+    // GET /api/preferences
+    func getPreferences() async throws -> UserPreferences { ... }
+
+    // PATCH /api/preferences
+    func updatePreferences(focusDurationMinutes: Int?, focusMode: String?) async throws -> UserPreferences { ... }
 }
 ```
 
@@ -276,7 +346,15 @@ func waitForUserCreation(maxRetries: Int = 5) async throws -> UserProfile {
 | `medium` | 50% | 30 min |
 | `hard` | 25% | 15 min |
 
+### UserPreferences
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `focusDurationMinutes` | `Int` | Default focus duration (1-240) |
+| `focusMode` | `String` | Default mode: `fun`, `easy`, `medium`, `hard` |
+| `updatedAt` | `String` | ISO 8601 datetime |
+
 ---
 
-*Last updated: February 12, 2026 — Phase 1 & 2 (Foundation + Authentication)*
+*Last updated: February 18, 2026 — Phase 1, 2 + Preferences*
 *Endpoints will be added here as new phases are implemented.*

@@ -61,6 +61,13 @@ export interface UserStats {
   updated_at: Date;
 }
 
+export interface UserPreferences {
+  user_id: string;
+  focus_duration_minutes: number;
+  focus_mode: FocusMode;
+  updated_at: Date;
+}
+
 export interface TimeSpending {
   id: string;
   user_id: string;

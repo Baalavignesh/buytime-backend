@@ -44,6 +44,10 @@ export async function createUser(data: {
     new_stats AS (
       INSERT INTO user_stats (user_id)
       SELECT id FROM new_user
+    ),
+    new_preferences AS (
+      INSERT INTO user_preferences (user_id)
+      SELECT id FROM new_user
     )
     SELECT * FROM new_user
   `;

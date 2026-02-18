@@ -225,6 +225,24 @@ CREATE TRIGGER update_balance_timestamp
 CREATE TRIGGER update_stats_timestamp
     BEFORE UPDATE ON user_stats
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+-- ============================================
+-- USER PREFERENCES TABLE
+-- Default focus settings, one row per user
+-- ============================================
+CREATE TABLE user_preferences (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    focus_duration_minutes INTEGER DEFAULT 25,
+    focus_mode TEXT DEFAULT 'easy',
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+ALTER TABLE user_preferences
+ADD CONSTRAINT valid_focus_mode CHECK (focus_mode IN ('fun', 'easy', 'medium', 'hard'));
+
+CREATE TRIGGER update_preferences_timestamp
+    BEFORE UPDATE ON user_preferences
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
 ```
 
 ---
@@ -493,6 +511,13 @@ export interface TimeSpending {
   started_at: Date;
   ended_at: Date | null;
   created_at: Date;
+}
+
+export interface UserPreferences {
+  user_id: string;
+  focus_duration_minutes: number;
+  focus_mode: FocusMode;
+  updated_at: Date;
 }
 
 // ============================================
@@ -812,7 +837,7 @@ export async function findUserById(id: string): Promise<User | null> {
 
 /**
  * Create a new user from Clerk webhook data.
- * Also creates associated user_balance and user_stats records.
+ * Also creates associated user_balance, user_stats, and user_preferences records.
  */
 export async function createUser(data: {
   clerkUserId: string;
@@ -839,6 +864,12 @@ export async function createUser(data: {
   // Create user_stats record
   await sql`
     INSERT INTO user_stats (user_id)
+    VALUES (${user.id})
+  `;
+
+  // Create user_preferences record
+  await sql`
+    INSERT INTO user_preferences (user_id)
     VALUES (${user.id})
   `;
 
@@ -902,7 +933,7 @@ export async function updateUser(
 
 /**
  * Delete a user and all their associated data.
- * CASCADE will handle user_balance, user_stats, focus_sessions, time_spending.
+ * CASCADE will handle user_balance, user_stats, user_preferences, focus_sessions, time_spending.
  */
 export async function deleteUser(clerkUserId: string): Promise<boolean> {
   const sql = getDb();
@@ -1467,12 +1498,14 @@ buytime-backend/
 │   ├── db/
 │   │   ├── client.ts           # ✅ Neon database client
 │   │   └── queries/
-│   │       └── users.ts        # ✅ User CRUD operations
+│   │       ├── users.ts        # ✅ User CRUD operations
+│   │       └── preferences.ts  # ✅ User preferences queries
 │   ├── middleware/
 │   │   └── auth.ts             # ✅ Clerk JWT verification
 │   ├── routes/
 │   │   ├── health.ts           # ✅ Health check endpoint
-│   │   └── users.ts            # ✅ User API routes
+│   │   ├── users.ts            # ✅ User API routes
+│   │   └── preferences.ts      # ✅ Preferences API routes
 │   ├── webhooks/
 │   │   └── clerk.ts            # ✅ Clerk webhook handler
 │   ├── types/
@@ -1519,6 +1552,7 @@ buytime-backend/
   SELECT * FROM users;
   SELECT * FROM user_balance;
   SELECT * FROM user_stats;
+  SELECT * FROM user_preferences;
   ```
 
 - [ ] **Test API Authentication**: Get a JWT token from iOS app and test:
@@ -1543,4 +1577,4 @@ After completing Phase 1 and 2, proceed to:
 ---
 
 *Implementation guide for BuyTime Backend - Phases 1 & 2*
-*Last updated: February 2, 2026*
+*Last updated: February 18, 2026*

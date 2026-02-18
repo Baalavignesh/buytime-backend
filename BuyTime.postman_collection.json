@@ -101,6 +101,55 @@
 			]
 		},
 		{
+			"name": "Preferences",
+			"item": [
+				{
+					"name": "Get Preferences",
+					"request": {
+						"method": "GET",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{clerk_jwt}}"
+							}
+						],
+						"url": {
+							"raw": "{{base_url}}/api/preferences",
+							"host": ["{{base_url}}"],
+							"path": ["api", "preferences"]
+						},
+						"description": "Get the authenticated user's focus preferences (default duration and mode)."
+					}
+				},
+				{
+					"name": "Update Preferences",
+					"request": {
+						"method": "PATCH",
+						"header": [
+							{
+								"key": "Authorization",
+								"value": "Bearer {{clerk_jwt}}"
+							},
+							{
+								"key": "Content-Type",
+								"value": "application/json"
+							}
+						],
+						"body": {
+							"mode": "raw",
+							"raw": "{\n  \"focusDurationMinutes\": 30,\n  \"focusMode\": \"medium\"\n}"
+						},
+						"url": {
+							"raw": "{{base_url}}/api/preferences",
+							"host": ["{{base_url}}"],
+							"path": ["api", "preferences"]
+						},
+						"description": "Update the authenticated user's focus preferences. At least one of focusDurationMinutes (1-240) or focusMode (fun, easy, medium, hard) must be provided."
+					}
+				}
+			]
+		},
+		{
 			"name": "Webhooks",
 			"item": [
 				{

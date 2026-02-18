@@ -115,6 +115,20 @@ CREATE INDEX idx_spending_app ON time_spending(app_bundle_id);
 CREATE INDEX idx_spending_date ON time_spending(started_at);
 
 -- ============================================
+-- USER PREFERENCES TABLE
+-- Default focus settings, one row per user
+-- ============================================
+CREATE TABLE user_preferences (
+    user_id UUID PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+    focus_duration_minutes INTEGER DEFAULT 25,
+    focus_mode TEXT DEFAULT 'easy',
+    updated_at TIMESTAMP DEFAULT NOW()
+);
+
+ALTER TABLE user_preferences
+ADD CONSTRAINT valid_focus_mode CHECK (focus_mode IN ('fun', 'easy', 'medium', 'hard'));
+
+-- ============================================
 -- HELPER FUNCTION: Auto-update updated_at
 -- ============================================
 CREATE OR REPLACE FUNCTION update_updated_at()
@@ -135,4 +149,8 @@ CREATE TRIGGER update_balance_timestamp
 
 CREATE TRIGGER update_stats_timestamp
     BEFORE UPDATE ON user_stats
+    FOR EACH ROW EXECUTE FUNCTION update_updated_at();
+
+CREATE TRIGGER update_preferences_timestamp
+    BEFORE UPDATE ON user_preferences
     FOR EACH ROW EXECUTE FUNCTION update_updated_at();
