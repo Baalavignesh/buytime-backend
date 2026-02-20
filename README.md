@@ -65,10 +65,11 @@ reward_minutes = focus_minutes × (multiplier / 100)
 
 ### Balance & Stats
 
-| Method | Endpoint       | Description                | Auth |
-|--------|----------------|----------------------------|------|
-| GET    | `/api/balance` | Get current balance/streak | ✓    |
-| GET    | `/api/stats`   | Get lifetime statistics    | ✓    |
+| Method | Endpoint       | Description                          | Auth |
+|--------|----------------|--------------------------------------|------|
+| GET    | `/api/balance` | Get current balance + today's stats  | ✓    |
+| PATCH  | `/api/balance` | Update available minutes             | ✓    |
+| GET    | `/api/stats`   | Get lifetime statistics              | ✓    |
 
 ### Webhooks
 

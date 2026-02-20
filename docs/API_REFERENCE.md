@@ -169,6 +169,78 @@ Authorization: Bearer <token>
 
 ---
 
+### Balance
+
+#### `GET /api/balance`
+
+Get the current user's reward balance and today's computed activity summary.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "availableMinutes": 120,
+    "currentStreakDays": 3,
+    "lastSessionDate": "2026-02-19",
+    "updatedAt": "2026-02-20T08:00:00.000Z",
+    "today": {
+      "earnedMinutes": 45,
+      "spentMinutes": 30,
+      "sessionsCompleted": 2,
+      "sessionsFailed": 0
+    }
+  }
+}
+```
+
+`today` stats are computed live from `focus_sessions` and `time_spending` — always accurate, no caching.
+
+---
+
+#### `PATCH /api/balance`
+
+Update the user's available minutes. The iOS app calls this when the user spends screen time on restricted apps.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "availableMinutes": 90
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `availableMinutes` | `integer` | Yes | Must be a non-negative integer |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "availableMinutes": 90,
+    "currentStreakDays": 3,
+    "lastSessionDate": "2026-02-19",
+    "updatedAt": "2026-02-20T08:15:00.000Z"
+  }
+}
+```
+
+**Error (400):** Missing field, non-integer, or negative value.
+
+---
+
 ### Webhooks (Server-to-Server)
 
 These are called by Clerk, not by the iOS app.
@@ -296,6 +368,12 @@ class BuyTimeAPI {
 
     // PATCH /api/preferences
     func updatePreferences(focusDurationMinutes: Int?, focusMode: String?) async throws -> UserPreferences { ... }
+
+    // GET /api/balance
+    func getBalance() async throws -> Balance { ... }
+
+    // PATCH /api/balance
+    func updateBalance(availableMinutes: Int) async throws -> Balance { ... }
 }
 ```
 
@@ -354,7 +432,22 @@ func waitForUserCreation(maxRetries: Int = 5) async throws -> UserProfile {
 | `focusMode` | `String` | Default mode: `fun`, `easy`, `medium`, `hard` |
 | `updatedAt` | `String` | ISO 8601 datetime |
 
+### Balance
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `availableMinutes` | `Int` | Spendable reward minutes |
+| `currentStreakDays` | `Int` | Consecutive days with completed sessions |
+| `lastSessionDate` | `String?` | ISO 8601 date or null |
+| `updatedAt` | `String` | ISO 8601 datetime |
+| `today.earnedMinutes` | `Int` | Reward minutes earned today (computed live) |
+| `today.spentMinutes` | `Int` | Reward minutes spent today (computed live) |
+| `today.sessionsCompleted` | `Int` | Completed focus sessions today |
+| `today.sessionsFailed` | `Int` | Failed focus sessions today |
+
+> `today` fields are only present on `GET /api/balance`, not on the `PATCH` response.
+
 ---
 
-*Last updated: February 18, 2026 — Phase 1, 2 + Preferences*
+*Last updated: February 20, 2026 — Phase 1, 2 + Preferences + Balance*
 *Endpoints will be added here as new phases are implemented.*

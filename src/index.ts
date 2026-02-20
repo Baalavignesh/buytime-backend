@@ -3,6 +3,7 @@ import { checkDbConnection } from "./db/client";
 import { healthCheck } from "./routes/health";
 import { getUser, updateUser, deleteUser } from "./routes/users";
 import { getPreferences, updatePreferences } from "./routes/preferences";
+import { getBalance, updateBalance } from "./routes/balance";
 import { handleClerkWebhook } from "./webhooks/clerk";
 import { notFound, error } from "./utils/response";
 
@@ -44,6 +45,8 @@ const routes: Record<string, RouteHandler> = {
   "DELETE /api/users/me": deleteUser,
   "GET /api/preferences": getPreferences,
   "PATCH /api/preferences": updatePreferences,
+  "GET /api/balance": getBalance,
+  "PATCH /api/balance": updateBalance,
   "POST /webhooks/clerk": handleClerkWebhook,
 };
 
@@ -104,5 +107,7 @@ Available routes:
   DELETE /api/users/me     - Delete current user (auth required)
   GET    /api/preferences  - Get focus preferences (auth required)
   PATCH  /api/preferences  - Update focus preferences (auth required)
+  GET    /api/balance      - Get current balance + today stats (auth required)
+  PATCH  /api/balance      - Update available minutes (auth required)
   POST   /webhooks/clerk   - Clerk webhook endpoint
 `);
