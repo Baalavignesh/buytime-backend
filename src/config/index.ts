@@ -1,23 +1,23 @@
 export const FOCUS_MODES = {
   fun: {
-    multiplier: 150,
+    multiplier: 100,
     displayName: "Fun",
-    description: "Lenient - 1hr focus = 1.5hr reward",
+    description: "Lenient - 1x reward (1hr focus = 1hr reward)",
   },
   easy: {
-    multiplier: 100,
+    multiplier: 75,
     displayName: "Easy",
-    description: "Balanced - 1hr focus = 1hr reward",
+    description: "Balanced - 0.75x reward (1hr focus = 45min reward)",
   },
   medium: {
     multiplier: 50,
     displayName: "Medium",
-    description: "Challenging - 1hr focus = 30min reward",
+    description: "Challenging - 0.5x reward (1hr focus = 30min reward)",
   },
   hard: {
     multiplier: 25,
     displayName: "Hard",
-    description: "Hardcore - 1hr focus = 15min reward",
+    description: "Hardcore - 0.25x reward (1hr focus = 15min reward)",
   },
 } as const;
 
