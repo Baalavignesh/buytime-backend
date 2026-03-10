@@ -4,6 +4,13 @@ import { healthCheck } from "./routes/health";
 import { getUser, updateUser, deleteUser } from "./routes/users";
 import { getPreferences, updatePreferences } from "./routes/preferences";
 import { getBalance, updateBalance } from "./routes/balance";
+import {
+  startSessionHandler,
+  endSessionHandler,
+  abandonSessionHandler,
+  getCurrentSessionHandler,
+  getSessionHistoryHandler,
+} from "./routes/sessions";
 import { handleClerkWebhook } from "./webhooks/clerk";
 import { notFound, error } from "./utils/response";
 
@@ -47,6 +54,11 @@ const routes: Record<string, RouteHandler> = {
   "PATCH /api/preferences": updatePreferences,
   "GET /api/balance": getBalance,
   "PATCH /api/balance": updateBalance,
+  "POST /api/sessions/start": startSessionHandler,
+  "POST /api/sessions/end": endSessionHandler,
+  "POST /api/sessions/abandon": abandonSessionHandler,
+  "GET /api/sessions/current": getCurrentSessionHandler,
+  "GET /api/sessions/history": getSessionHistoryHandler,
   "POST /webhooks/clerk": handleClerkWebhook,
 };
 
@@ -66,27 +78,29 @@ const server = Bun.serve({
     // Find matching route
     const handler = routes[`${method} ${path}`];
 
+    let response: Response;
+
     if (handler) {
       try {
-        const response = await handler(req);
-
-        // Add CORS headers to response
-        const newHeaders = new Headers(response.headers);
-        for (const [key, value] of Object.entries(corsHeaders)) {
-          newHeaders.set(key, value);
-        }
-
-        return new Response(response.body, {
-          status: response.status,
-          headers: newHeaders,
-        });
+        response = await handler(req);
       } catch (err) {
         console.error(`Error handling ${method} ${path}:`, err);
-        return error("Internal server error", 500);
+        response = error("Internal server error", 500);
       }
+    } else {
+      response = notFound(`Route not found: ${method} ${path}`);
     }
 
-    return notFound(`Route not found: ${method} ${path}`);
+    // Add CORS headers to all responses
+    const newHeaders = new Headers(response.headers);
+    for (const [key, value] of Object.entries(corsHeaders)) {
+      newHeaders.set(key, value);
+    }
+
+    return new Response(response.body, {
+      status: response.status,
+      headers: newHeaders,
+    });
   },
 
   error(err: Error): Response {
@@ -107,7 +121,12 @@ Available routes:
   DELETE /api/users/me     - Delete current user (auth required)
   GET    /api/preferences  - Get focus preferences (auth required)
   PATCH  /api/preferences  - Update focus preferences (auth required)
-  GET    /api/balance      - Get current balance + today stats (auth required)
-  PATCH  /api/balance      - Update available minutes (auth required)
-  POST   /webhooks/clerk   - Clerk webhook endpoint
+  GET    /api/balance             - Get current balance + today stats (auth required)
+  PATCH  /api/balance             - Update available minutes (auth required)
+  POST   /api/sessions/start      - Start a focus session (auth required)
+  POST   /api/sessions/end        - Complete a session + earn reward (auth required)
+  POST   /api/sessions/abandon    - Abandon a session (auth required)
+  GET    /api/sessions/current    - Get active session (auth required)
+  GET    /api/sessions/history    - Get session history (auth required)
+  POST   /webhooks/clerk          - Clerk webhook endpoint
 `);

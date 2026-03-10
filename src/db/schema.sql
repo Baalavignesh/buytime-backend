@@ -56,6 +56,9 @@ CREATE INDEX idx_sessions_user_date ON focus_sessions(user_id, started_at);
 ALTER TABLE focus_sessions
 ADD CONSTRAINT valid_mode CHECK (mode IN ('fun', 'easy', 'medium', 'hard'));
 
+-- Enforce one active session per user at the DB level (prevents race conditions)
+CREATE UNIQUE INDEX idx_one_active_session_per_user ON focus_sessions(user_id) WHERE status = 'active';
+
 -- ============================================
 -- USER BALANCE TABLE
 -- One row per user (user_id is PK)

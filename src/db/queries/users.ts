@@ -1,6 +1,5 @@
 import { getDb } from "../client";
-import type { User, UserBalance, UserStats } from "../../types";
-
+import type { User, UserBalance } from "../../types";
 
 export async function findUserByClerkId(
   clerkUserId: string
@@ -8,14 +7,6 @@ export async function findUserByClerkId(
   const sql = getDb();
   const result = await sql`
     SELECT * FROM users WHERE clerk_user_id = ${clerkUserId}
-  `;
-  return (result[0] as User) || null;
-}
-
-export async function findUserById(id: string): Promise<User | null> {
-  const sql = getDb();
-  const result = await sql`
-    SELECT * FROM users WHERE id = ${id}
   `;
   return (result[0] as User) || null;
 }
@@ -101,40 +92,46 @@ export async function deleteUser(clerkUserId: string): Promise<boolean> {
   return result.length > 0;
 }
 
-export async function getUserBalance(
-  userId: string
-): Promise<UserBalance | null> {
-  const sql = getDb();
-  const result = await sql`
-    SELECT * FROM user_balance WHERE user_id = ${userId}
-  `;
-  return (result[0] as UserBalance) || null;
-}
-
-export async function getUserStats(
-  userId: string
-): Promise<UserStats | null> {
-  const sql = getDb();
-  const result = await sql`
-    SELECT * FROM user_stats WHERE user_id = ${userId}
-  `;
-  return (result[0] as UserStats) || null;
-}
-
 export async function getUserProfile(clerkUserId: string): Promise<{
   user: User;
   balance: UserBalance;
-  stats: UserStats;
 } | null> {
-  const user = await findUserByClerkId(clerkUserId);
-  if (!user) return null;
+  const sql = getDb();
+  const result = await sql`
+    SELECT
+      u.id, u.clerk_user_id, u.email, u.display_name,
+      u.subscription_tier, u.subscription_status, u.subscription_expires_at,
+      u.created_at, u.updated_at,
+      ub.available_minutes, ub.current_streak_days, ub.last_session_date,
+      ub.updated_at AS balance_updated_at
+    FROM users u
+    JOIN user_balance ub ON ub.user_id = u.id
+    WHERE u.clerk_user_id = ${clerkUserId}
+  `;
 
-  const [balance, stats] = await Promise.all([
-    getUserBalance(user.id),
-    getUserStats(user.id),
-  ]);
+  if (!result[0]) return null;
 
-  if (!balance || !stats) return null;
+  const row = result[0] as Record<string, unknown>;
 
-  return { user, balance, stats };
+  const user: User = {
+    id: row.id as string,
+    clerk_user_id: row.clerk_user_id as string,
+    email: row.email as string | null,
+    display_name: row.display_name as string | null,
+    subscription_tier: row.subscription_tier as "free" | "premium",
+    subscription_status: row.subscription_status as "none" | "active" | "expired" | "cancelled",
+    subscription_expires_at: row.subscription_expires_at as Date | null,
+    created_at: row.created_at as Date,
+    updated_at: row.updated_at as Date,
+  };
+
+  const balance: UserBalance = {
+    user_id: row.id as string,
+    available_minutes: row.available_minutes as number,
+    current_streak_days: row.current_streak_days as number,
+    last_session_date: row.last_session_date as Date | null,
+    updated_at: row.balance_updated_at as Date,
+  };
+
+  return { user, balance };
 }

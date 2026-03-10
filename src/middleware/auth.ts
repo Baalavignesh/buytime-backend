@@ -1,11 +1,7 @@
-import { createClerkClient, verifyToken } from "@clerk/backend";
+import { verifyToken } from "@clerk/backend";
 import { config } from "../config";
 import { unauthorized } from "../utils/response";
 import type { AuthenticatedRequest } from "../types";
-
-const clerk = createClerkClient({
-  secretKey: config.clerkSecretKey,
-});
 
 export async function verifyAuthToken(req: Request): Promise<string | null> {
   const authHeader = req.headers.get("Authorization");
@@ -43,8 +39,4 @@ export function withAuth(
 
     return handler(req, { userId });
   };
-}
-
-export function getClerkClient() {
-  return clerk;
 }

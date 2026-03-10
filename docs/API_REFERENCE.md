@@ -48,9 +48,11 @@ All responses follow this shape:
 | Code | Meaning |
 |------|---------|
 | 200  | Success |
+| 201  | Created |
 | 400  | Bad request (invalid body/params) |
 | 401  | Unauthorized (missing or invalid JWT) |
 | 404  | Resource not found |
+| 409  | Conflict (e.g. session already active) |
 | 500  | Internal server error |
 
 ---
@@ -320,6 +322,232 @@ Content-Type: application/json
 
 ---
 
+### Sessions
+
+#### `POST /api/sessions/start`
+
+Start a new focus session. Only one active session is allowed at a time.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "sessionId": "client-generated-uuid",
+  "mode": "easy",
+  "plannedDurationMinutes": 60
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `sessionId` | `string` (UUID) | No | Client-generated UUID. Enables idempotent retries. If omitted, the server generates one |
+| `mode` | `string` | Yes | One of: `fun`, `easy`, `medium`, `hard` |
+| `plannedDurationMinutes` | `integer` | No | Target duration (1–480). Omit for open-ended sessions |
+
+**Response (201 — new session / 200 — idempotent retry):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-string",
+    "mode": "easy",
+    "multiplierUsed": 75,
+    "startedAt": "2026-02-21T10:00:00.000Z",
+    "plannedDurationMinutes": 60,
+    "status": "active"
+  }
+}
+```
+
+**Idempotency:** If `sessionId` is provided and a session with that ID already exists for this user, returns `200` with the existing session instead of creating a duplicate.
+
+**Error (400):** Invalid or missing `mode`, or `plannedDurationMinutes` out of range.
+
+**Error (409):** User already has a *different* active session. End or abandon it first.
+
+---
+
+#### `POST /api/sessions/end`
+
+Complete a focus session and earn reward minutes. Updates balance and lifetime stats atomically.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "sessionId": "uuid-string",
+  "actualDurationMinutes": 55
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `sessionId` | `string` (UUID) | Yes | ID of the active session to end |
+| `actualDurationMinutes` | `integer` | Yes | Actual focus time reported by the iOS app. Must be ≥ 1 |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "session": {
+      "id": "uuid-string",
+      "mode": "easy",
+      "status": "completed",
+      "actualDurationMinutes": 55,
+      "multiplierUsed": 75,
+      "rewardMinutes": 41,
+      "startedAt": "2026-02-21T10:00:00.000Z",
+      "endedAt": "2026-02-21T10:55:00.000Z"
+    },
+    "balance": {
+      "availableMinutes": 161,
+      "currentStreakDays": 3
+    }
+  }
+}
+```
+
+`rewardMinutes` is calculated as `floor(actualDurationMinutes × multiplierUsed / 100)`.
+
+**Error (400):** Missing or invalid fields.
+
+**Idempotency:** If the session is already completed, returns `200` with the existing completed session data and current balance.
+
+**Error (404):** Session not found or not owned by this user.
+
+---
+
+#### `POST /api/sessions/abandon`
+
+Abandon an active session with no reward. Increments the failed sessions counter.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "sessionId": "uuid-string"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `sessionId` | `string` (UUID) | Yes | ID of the active session to abandon |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "id": "uuid-string",
+    "mode": "easy",
+    "status": "failed",
+    "startedAt": "2026-02-21T10:00:00.000Z",
+    "endedAt": "2026-02-21T10:20:00.000Z"
+  }
+}
+```
+
+**Idempotency:** If the session is already failed/abandoned, returns `200` with the existing session data.
+
+**Error (404):** Session not found or not owned by this user.
+
+---
+
+#### `GET /api/sessions/current`
+
+Get the user's currently active session, if any.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "session": {
+      "id": "uuid-string",
+      "mode": "easy",
+      "multiplierUsed": 75,
+      "startedAt": "2026-02-21T10:00:00.000Z",
+      "plannedDurationMinutes": 60,
+      "status": "active"
+    }
+  }
+}
+```
+
+`session` is `null` if no session is currently active.
+
+---
+
+#### `GET /api/sessions/history`
+
+Get a paginated list of the user's past sessions.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `limit` | `integer` | `20` | Max results per page (1–100) |
+| `offset` | `integer` | `0` | Pagination offset |
+| `status` | `string` | all | Filter by status: `active`, `completed`, or `failed` |
+
+**Example:** `GET /api/sessions/history?limit=20&offset=0&status=completed`
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "sessions": [
+      {
+        "id": "uuid-string",
+        "mode": "easy",
+        "multiplierUsed": 75,
+        "status": "completed",
+        "plannedDurationMinutes": 60,
+        "actualDurationMinutes": 55,
+        "rewardMinutes": 41,
+        "startedAt": "2026-02-21T10:00:00.000Z",
+        "endedAt": "2026-02-21T10:55:00.000Z",
+        "createdAt": "2026-02-21T10:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "total": 42,
+      "limit": 20,
+      "offset": 0
+    }
+  }
+}
+```
+
+---
+
 ## Swift Integration Notes
 
 ### Suggested NetworkManager pattern
@@ -374,6 +602,21 @@ class BuyTimeAPI {
 
     // PATCH /api/balance
     func updateBalance(availableMinutes: Int) async throws -> Balance { ... }
+
+    // POST /api/sessions/start
+    func startSession(sessionId: UUID = UUID(), mode: String, plannedDurationMinutes: Int?) async throws -> FocusSession { ... }
+
+    // POST /api/sessions/end
+    func endSession(sessionId: String, actualDurationMinutes: Int) async throws -> SessionResult { ... }
+
+    // POST /api/sessions/abandon
+    func abandonSession(sessionId: String) async throws -> FocusSession { ... }
+
+    // GET /api/sessions/current
+    func getCurrentSession() async throws -> FocusSession? { ... }
+
+    // GET /api/sessions/history
+    func getSessionHistory(limit: Int, offset: Int, status: String?) async throws -> SessionHistory { ... }
 }
 ```
 
@@ -415,15 +658,6 @@ func waitForUserCreation(maxRetries: Int = 5) async throws -> UserProfile {
 | `balance.availableMinutes` | `Int` | Spendable reward minutes |
 | `balance.currentStreakDays` | `Int` | Consecutive days with sessions |
 
-### Focus Modes (for future session endpoints)
-
-| Mode | Multiplier | Reward per 60min focus |
-|------|-----------|----------------------|
-| `fun` | 150% | 90 min |
-| `easy` | 100% | 60 min |
-| `medium` | 50% | 30 min |
-| `hard` | 25% | 15 min |
-
 ### UserPreferences
 
 | Field | Type | Notes |
@@ -447,7 +681,30 @@ func waitForUserCreation(maxRetries: Int = 5) async throws -> UserProfile {
 
 > `today` fields are only present on `GET /api/balance`, not on the `PATCH` response.
 
+### FocusSession
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | `String` (UUID) | Session identifier |
+| `mode` | `String` | `fun`, `easy`, `medium`, or `hard` |
+| `multiplierUsed` | `Int` | Reward multiplier snapshot at session start |
+| `status` | `String` | `active`, `completed`, or `failed` |
+| `plannedDurationMinutes` | `Int?` | Target duration, or null for open-ended |
+| `actualDurationMinutes` | `Int?` | Actual focus time (set on end/abandon) |
+| `rewardMinutes` | `Int?` | Reward earned (set on completion only) |
+| `startedAt` | `String` | ISO 8601 datetime |
+| `endedAt` | `String?` | ISO 8601 datetime, or null if still active |
+| `createdAt` | `String` | ISO 8601 datetime |
+
+### Focus Modes
+
+| Mode | Multiplier | Reward per 60 min focus |
+|------|-----------|------------------------|
+| `fun` | 100% | 60 min |
+| `easy` | 75% | 45 min |
+| `medium` | 50% | 30 min |
+| `hard` | 25% | 15 min |
+
 ---
 
-*Last updated: February 20, 2026 — Phase 1, 2 + Preferences + Balance*
-*Endpoints will be added here as new phases are implemented.*
+*Last updated: March 5, 2026 — Phase 1, 2 + Preferences + Balance + Sessions (idempotent)*

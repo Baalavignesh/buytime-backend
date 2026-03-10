@@ -68,17 +68,6 @@ export interface UserPreferences {
   updated_at: Date;
 }
 
-export interface TimeSpending {
-  id: string;
-  user_id: string;
-  app_bundle_id: string;
-  app_name: string | null;
-  minutes_spent: number;
-  started_at: Date;
-  ended_at: Date | null;
-  created_at: Date;
-}
-
 // ============================================
 // API Request/Response Types
 // ============================================

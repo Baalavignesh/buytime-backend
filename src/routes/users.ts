@@ -42,15 +42,15 @@ export const updateUser = withAuth(
         return error("Invalid JSON body", 400);
       }
 
-      if (
-        body.displayName !== undefined &&
-        typeof body.displayName !== "string"
-      ) {
-        return error("displayName must be a string", 400);
+      if (body.displayName === undefined) {
+        return error("displayName is required", 400);
+      }
+      if (typeof body.displayName !== "string" || body.displayName.trim().length === 0) {
+        return error("displayName must be a non-empty string", 400);
       }
 
       const user = await updateUserQuery(auth.userId, {
-        displayName: body.displayName,
+        displayName: body.displayName.trim(),
       });
 
       if (!user) {
