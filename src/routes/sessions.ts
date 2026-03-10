@@ -133,9 +133,9 @@ export const endSessionHandler = withAuth(
 export const abandonSessionHandler = withAuth(
   async (req: Request, auth: AuthenticatedRequest): Promise<Response> => {
     try {
-      let body: { sessionId?: string };
+      let body: { sessionId?: string; penaltyMinutes?: number };
       try {
-        body = (await req.json()) as { sessionId?: string };
+        body = (await req.json()) as { sessionId?: string; penaltyMinutes?: number };
       } catch {
         return error("Invalid JSON body", 400);
       }
@@ -144,7 +144,17 @@ export const abandonSessionHandler = withAuth(
         return error("sessionId is required", 400);
       }
 
-      const session = await abandonSession(auth.userId, body.sessionId);
+      if (body.penaltyMinutes !== undefined) {
+        if (
+          typeof body.penaltyMinutes !== "number" ||
+          body.penaltyMinutes < 0 ||
+          body.penaltyMinutes > 1440
+        ) {
+          return error("penaltyMinutes must be a number between 0 and 1440", 400);
+        }
+      }
+
+      const session = await abandonSession(auth.userId, body.sessionId, body.penaltyMinutes ?? 0);
 
       if (!session) {
         return notFound("Session not found or not owned by you");
@@ -156,6 +166,10 @@ export const abandonSessionHandler = withAuth(
         status: session.status,
         startedAt: session.started_at,
         endedAt: session.ended_at,
+        penaltyMinutes: session.penalty_minutes,
+        balance: {
+          availableMinutes: session.available_minutes,
+        },
       });
     } catch (err) {
       console.error("Error abandoning session:", err);

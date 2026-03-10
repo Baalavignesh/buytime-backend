@@ -430,7 +430,7 @@ Content-Type: application/json
 
 #### `POST /api/sessions/abandon`
 
-Abandon an active session with no reward. Increments the failed sessions counter.
+Abandon an active session. If `penaltyMinutes` is provided, that amount is deducted from the user's available balance (floored at 0). The iOS app should send half the already-earned reward time as the penalty; if there's no earned time, omit `penaltyMinutes` or send 0.
 
 **Headers:**
 ```
@@ -441,13 +441,15 @@ Content-Type: application/json
 **Request Body:**
 ```json
 {
-  "sessionId": "uuid-string"
+  "sessionId": "uuid-string",
+  "penaltyMinutes": 15
 }
 ```
 
 | Field | Type | Required | Notes |
 |-------|------|----------|-------|
 | `sessionId` | `string` (UUID) | Yes | ID of the active session to abandon |
+| `penaltyMinutes` | `number` | No | Minutes to deduct from balance (0–1440). Typically half the earned time. Defaults to 0 |
 
 **Response (200):**
 ```json
@@ -458,12 +460,18 @@ Content-Type: application/json
     "mode": "easy",
     "status": "failed",
     "startedAt": "2026-02-21T10:00:00.000Z",
-    "endedAt": "2026-02-21T10:20:00.000Z"
+    "endedAt": "2026-02-21T10:20:00.000Z",
+    "penaltyMinutes": 15,
+    "balance": {
+      "availableMinutes": 105
+    }
   }
 }
 ```
 
-**Idempotency:** If the session is already failed/abandoned, returns `200` with the existing session data.
+**Idempotency:** If the session is already failed/abandoned, returns `200` with the existing session data (penalty 0, current balance).
+
+**Error (400):** Invalid `penaltyMinutes` value.
 
 **Error (404):** Session not found or not owned by this user.
 
@@ -610,7 +618,7 @@ class BuyTimeAPI {
     func endSession(sessionId: String, actualDurationMinutes: Int) async throws -> SessionResult { ... }
 
     // POST /api/sessions/abandon
-    func abandonSession(sessionId: String) async throws -> FocusSession { ... }
+    func abandonSession(sessionId: String, penaltyMinutes: Int = 0) async throws -> AbandonResult { ... }
 
     // GET /api/sessions/current
     func getCurrentSession() async throws -> FocusSession? { ... }
@@ -707,4 +715,4 @@ func waitForUserCreation(maxRetries: Int = 5) async throws -> UserProfile {
 
 ---
 
-*Last updated: March 5, 2026 — Phase 1, 2 + Preferences + Balance + Sessions (idempotent)*
+*Last updated: March 9, 2026 — Phase 1, 2 + Preferences + Balance + Sessions (idempotent, abandon penalty)*

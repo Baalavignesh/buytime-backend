@@ -184,12 +184,25 @@ export async function completeSession(
   return (existing[0] as CompletedSessionResult) || null;
 }
 
-// Mark session as failed and increment total_sessions_failed.
+export interface AbandonedSessionResult {
+  id: string;
+  mode: FocusMode;
+  status: "failed";
+  started_at: Date;
+  ended_at: Date;
+  penalty_minutes: number;
+  available_minutes: number;
+}
+
+// Mark session as failed, deduct penaltyMinutes from balance, and increment total_sessions_failed.
+// penaltyMinutes should be half the earned time; if 0 or not provided, no balance change.
 export async function abandonSession(
   clerkUserId: string,
-  sessionId: string
-): Promise<FocusSession | null> {
+  sessionId: string,
+  penaltyMinutes: number = 0
+): Promise<AbandonedSessionResult | null> {
   const sql = getDb();
+  const penalty = Math.max(0, Math.floor(penaltyMinutes));
   const result = await sql`
     WITH user_ref AS (
       SELECT id FROM users WHERE clerk_user_id = ${clerkUserId}
@@ -204,24 +217,48 @@ export async function abandonSession(
         AND status = 'active'
       RETURNING *
     ),
+    balance_update AS (
+      UPDATE user_balance
+      SET
+        available_minutes = GREATEST(0, available_minutes - ${penalty})
+      WHERE user_id = (SELECT id FROM user_ref)
+        AND ${penalty} > 0
+        AND EXISTS (SELECT 1 FROM session_update)
+      RETURNING available_minutes
+    ),
     stats_update AS (
       UPDATE user_stats
       SET total_sessions_failed = total_sessions_failed + 1
       WHERE user_id = (SELECT id FROM user_ref)
         AND EXISTS (SELECT 1 FROM session_update)
     )
-    SELECT * FROM session_update
+    SELECT
+      su.id,
+      su.mode,
+      su.status,
+      su.started_at,
+      su.ended_at,
+      ${penalty}::integer AS penalty_minutes,
+      COALESCE(
+        (SELECT available_minutes FROM balance_update),
+        (SELECT available_minutes FROM user_balance WHERE user_id = (SELECT id FROM user_ref))
+      ) AS available_minutes
+    FROM session_update su
   `;
-  if (result[0]) return result[0] as FocusSession;
+  if (result[0]) return result[0] as AbandonedSessionResult;
   // If no update, check if already failed (idempotent retry)
   const existing = await sql`
-    SELECT fs.* FROM focus_sessions fs
+    SELECT fs.id, fs.mode, fs.status, fs.started_at, fs.ended_at,
+           0::integer AS penalty_minutes,
+           ub.available_minutes
+    FROM focus_sessions fs
     JOIN users u ON u.id = fs.user_id
+    JOIN user_balance ub ON ub.user_id = u.id
     WHERE fs.id = ${sessionId}
       AND u.clerk_user_id = ${clerkUserId}
       AND fs.status = 'failed'
   `;
-  return (existing[0] as FocusSession) || null;
+  return (existing[0] as AbandonedSessionResult) || null;
 }
 
 export async function getSessionHistory(
