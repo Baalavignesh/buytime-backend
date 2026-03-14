@@ -61,6 +61,23 @@ export interface UserStats {
   updated_at: Date;
 }
 
+export type DeviceType = "iphone" | "ipad" | "mac" | "chrome_extension";
+export type SpendingSource = "shield" | "desktop_app" | "browser_extension";
+
+export interface TimeSpending {
+  id: string;
+  user_id: string;
+  app_identifier: string | null;
+  app_name: string | null;
+  minutes_spent: number;
+  started_at: Date;
+  ended_at: Date | null;
+  device_type: DeviceType;
+  device_name: string | null;
+  source: SpendingSource;
+  created_at: Date;
+}
+
 export interface UserPreferences {
   user_id: string;
   focus_duration_minutes: number;

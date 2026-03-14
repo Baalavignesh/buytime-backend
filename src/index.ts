@@ -11,6 +11,11 @@ import {
   getCurrentSessionHandler,
   getSessionHistoryHandler,
 } from "./routes/sessions";
+import {
+  recordSpendingHandler,
+  getSpendingHistoryHandler,
+  getSpendingSummaryHandler,
+} from "./routes/spending";
 import { handleClerkWebhook } from "./webhooks/clerk";
 import { notFound, error } from "./utils/response";
 
@@ -59,6 +64,9 @@ const routes: Record<string, RouteHandler> = {
   "POST /api/sessions/abandon": abandonSessionHandler,
   "GET /api/sessions/current": getCurrentSessionHandler,
   "GET /api/sessions/history": getSessionHistoryHandler,
+  "POST /api/spending": recordSpendingHandler,
+  "GET /api/spending/history": getSpendingHistoryHandler,
+  "GET /api/spending/summary": getSpendingSummaryHandler,
   "POST /webhooks/clerk": handleClerkWebhook,
 };
 
@@ -128,5 +136,8 @@ Available routes:
   POST   /api/sessions/abandon    - Abandon a session (auth required)
   GET    /api/sessions/current    - Get active session (auth required)
   GET    /api/sessions/history    - Get session history (auth required)
+  POST   /api/spending            - Record time spending (auth required)
+  GET    /api/spending/history    - Get spending history (auth required)
+  GET    /api/spending/summary    - Get spending summary (auth required)
   POST   /webhooks/clerk          - Clerk webhook endpoint
 `);

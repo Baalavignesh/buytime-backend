@@ -556,6 +556,155 @@ Authorization: Bearer <token>
 
 ---
 
+### Time Spending
+
+#### `POST /api/spending`
+
+Record time spent using entertainment apps. Deducts `minutesSpent` from the user's available balance and updates lifetime stats atomically. Returns an error if balance is insufficient.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+Content-Type: application/json
+```
+
+**Request Body:**
+```json
+{
+  "minutesSpent": 15,
+  "startedAt": "2026-03-14T10:00:00.000Z",
+  "endedAt": "2026-03-14T10:15:00.000Z",
+  "deviceType": "iphone",
+  "source": "shield",
+  "appIdentifier": null,
+  "appName": null,
+  "deviceName": "iPhone 16 Pro"
+}
+```
+
+| Field | Type | Required | Notes |
+|-------|------|----------|-------|
+| `minutesSpent` | `integer` | Yes | Minutes consumed (1–1440) |
+| `startedAt` | `string` (ISO 8601) | Yes | When app usage started |
+| `endedAt` | `string` (ISO 8601) | No | When app usage ended |
+| `deviceType` | `string` | Yes | `iphone`, `ipad`, `mac`, or `chrome_extension` |
+| `source` | `string` | Yes | `shield` (iOS), `desktop_app`, or `browser_extension` |
+| `appIdentifier` | `string` | No | Bundle ID, domain, or exe name. NULL on iOS |
+| `appName` | `string` | No | Human-readable app name. NULL on iOS |
+| `deviceName` | `string` | No | Device name (e.g. `"MacBook Pro"`) |
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "spending": {
+      "id": "uuid-string",
+      "appIdentifier": null,
+      "appName": null,
+      "minutesSpent": 15,
+      "startedAt": "2026-03-14T10:00:00.000Z",
+      "endedAt": "2026-03-14T10:15:00.000Z",
+      "deviceType": "iphone",
+      "deviceName": "iPhone 16 Pro",
+      "source": "shield"
+    },
+    "balance": {
+      "availableMinutes": 105
+    }
+  }
+}
+```
+
+**Error (400):** Insufficient balance or user not found.
+
+---
+
+#### `GET /api/spending/history`
+
+Get a paginated list of the user's time spending records with optional filters.
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Query Parameters:**
+
+| Param | Type | Default | Notes |
+|-------|------|---------|-------|
+| `limit` | `integer` | `20` | Max results per page (1–100) |
+| `offset` | `integer` | `0` | Pagination offset |
+| `deviceType` | `string` | all | Filter: `iphone`, `ipad`, `mac`, `chrome_extension` |
+| `source` | `string` | all | Filter: `shield`, `desktop_app`, `browser_extension` |
+| `startDate` | `string` (ISO 8601) | — | Filter records from this date |
+| `endDate` | `string` (ISO 8601) | — | Filter records up to this date |
+
+**Example:** `GET /api/spending/history?limit=20&offset=0&deviceType=mac`
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "records": [
+      {
+        "id": "uuid-string",
+        "appIdentifier": "com.google.Chrome",
+        "appName": "Google Chrome",
+        "minutesSpent": 30,
+        "startedAt": "2026-03-14T10:00:00.000Z",
+        "endedAt": "2026-03-14T10:30:00.000Z",
+        "deviceType": "mac",
+        "deviceName": "MacBook Pro",
+        "source": "desktop_app",
+        "createdAt": "2026-03-14T10:00:00.000Z"
+      }
+    ],
+    "pagination": {
+      "total": 15,
+      "limit": 20,
+      "offset": 0
+    }
+  }
+}
+```
+
+---
+
+#### `GET /api/spending/summary`
+
+Get aggregate spending stats: today's total, lifetime total, breakdown by device, and top apps (desktop/browser only).
+
+**Headers:**
+```
+Authorization: Bearer <token>
+```
+
+**Response (200):**
+```json
+{
+  "success": true,
+  "data": {
+    "todaySpentMinutes": 45,
+    "totalSpentMinutes": 1200,
+    "totalRecords": 87,
+    "byDevice": [
+      { "deviceType": "iphone", "minutes": 800, "count": 50 },
+      { "deviceType": "mac", "minutes": 400, "count": 37 }
+    ],
+    "topApps": [
+      { "appIdentifier": "com.google.Chrome", "appName": "Google Chrome", "minutes": 200, "count": 15 },
+      { "appIdentifier": "com.spotify.client", "appName": "Spotify", "minutes": 100, "count": 10 }
+    ]
+  }
+}
+```
+
+`topApps` only includes records where `appIdentifier` is not NULL (desktop/browser sources). Limited to top 10.
+
+---
+
 ## Swift Integration Notes
 
 ### Suggested NetworkManager pattern
@@ -625,6 +774,15 @@ class BuyTimeAPI {
 
     // GET /api/sessions/history
     func getSessionHistory(limit: Int, offset: Int, status: String?) async throws -> SessionHistory { ... }
+
+    // POST /api/spending
+    func recordSpending(minutesSpent: Int, startedAt: Date, endedAt: Date?, deviceType: String, source: String, appIdentifier: String?, appName: String?, deviceName: String?) async throws -> SpendingResult { ... }
+
+    // GET /api/spending/history
+    func getSpendingHistory(limit: Int, offset: Int, deviceType: String?, source: String?, startDate: Date?, endDate: Date?) async throws -> SpendingHistory { ... }
+
+    // GET /api/spending/summary
+    func getSpendingSummary() async throws -> SpendingSummary { ... }
 }
 ```
 
@@ -704,6 +862,21 @@ func waitForUserCreation(maxRetries: Int = 5) async throws -> UserProfile {
 | `endedAt` | `String?` | ISO 8601 datetime, or null if still active |
 | `createdAt` | `String` | ISO 8601 datetime |
 
+### TimeSpending
+
+| Field | Type | Notes |
+|-------|------|-------|
+| `id` | `String` (UUID) | Spending record identifier |
+| `appIdentifier` | `String?` | Bundle ID, domain, or exe name. NULL on iOS |
+| `appName` | `String?` | Human-readable app name. NULL on iOS |
+| `minutesSpent` | `Int` | Reward minutes consumed |
+| `startedAt` | `String` | ISO 8601 datetime |
+| `endedAt` | `String?` | ISO 8601 datetime, or null |
+| `deviceType` | `String` | `iphone`, `ipad`, `mac`, `chrome_extension` |
+| `deviceName` | `String?` | User-facing device name |
+| `source` | `String` | `shield`, `desktop_app`, `browser_extension` |
+| `createdAt` | `String` | ISO 8601 datetime |
+
 ### Focus Modes
 
 | Mode | Multiplier | Reward per 60 min focus |
@@ -715,4 +888,4 @@ func waitForUserCreation(maxRetries: Int = 5) async throws -> UserProfile {
 
 ---
 
-*Last updated: March 9, 2026 — Phase 1, 2 + Preferences + Balance + Sessions (idempotent, abandon penalty)*
+*Last updated: March 14, 2026 — Added time spending endpoints (record, history, summary) with multi-platform support*
